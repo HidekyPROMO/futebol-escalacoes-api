@@ -1,38 +1,41 @@
 from flask import Flask, request, jsonify
 import requests
-from bs4 import BeautifulSoup
+import os
 
 app = Flask(__name__)
 
-@app.route('/escalacao', methods=['GET'])
-def buscar_escalação():
-    time = request.args.get('time')
-    if not time:
-        return jsonify({"error": "Parâmetro 'time' obrigatório"}), 400
+API_KEY = "58ccb64123b8f5e6631108ac4a05815e"
+API_URL = "https://v3.football.api-sports.io"
+HEADERS = {"x-apisports-key": API_KEY}
 
-    query = f"{time} escalação provável hoje site:sofascore.com"
-    url = f"https://www.google.com/search?q={query}"
-    headers = {"User-Agent": "Mozilla/5.0"}
+def fetch_from_api(path, params=None):
+    url = f"{API_URL}{path}"
+    response = requests.get(url, headers=HEADERS, params=params)
+    return response.json(), response.status_code
 
-    res = requests.get(url, headers=headers)
-    
-    if "captcha" in res.text.lower() or "detected unusual traffic" in res.text.lower():
-        return jsonify({
-            "time": time,
-            "escalacao": "A busca foi bloqueada pelo Google. Tente novamente em alguns minutos ou use outra fonte."
-        }), 503
+@app.route("/<endpoint>", methods=['GET'])
+def generic_endpoint(endpoint):
+    params = request.args.to_dict()
+    data, status = fetch_from_api(f"/{endpoint}", params)
+    return jsonify(data), status
 
-    soup = BeautifulSoup(res.text, "html.parser")
-    blocos = soup.find_all("div", class_="BNeawe")
+@app.route("/<section>/<endpoint>", methods=['GET'])
+def nested_endpoint(section, endpoint):
+    params = request.args.to_dict()
+    data, status = fetch_from_api(f"/{section}/{endpoint}", params)
+    return jsonify(data), status
 
-    if blocos:
-        resultado = blocos[0].get_text(strip=True)
-        return jsonify({
-            "time": time,
-            "escalacao": resultado
-        })
-    else:
-        return jsonify({
-            "time": time,
-            "escalacao": "Nenhum dado encontrado. O formato da fonte pode ter mudado ou foi bloqueado."
-        }), 404
+@app.route("/<section>/<sub>/<endpoint>", methods=['GET'])
+def deep_nested_endpoint(section, sub, endpoint):
+    params = request.args.to_dict()
+    data, status = fetch_from_api(f"/{section}/{sub}/{endpoint}", params)
+    return jsonify(data), status
+
+if __name__ == '__main__':
+    app.run(debug=True)
+# Ensure the API key is set as an environment variable for security
+if not API_KEY:
+    raise ValueError("API_KEY is not set. Please set the API_KEY environment variable.")
+# Ensure the API URL is set as an environment variable for flexibility
+if not API_URL:
+    raise ValueError("API_URL is not set. Please set the API_URL environment variable.")
