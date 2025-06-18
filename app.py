@@ -15,6 +15,13 @@ def buscar_escalação():
     headers = {"User-Agent": "Mozilla/5.0"}
 
     res = requests.get(url, headers=headers)
+    
+    if "captcha" in res.text.lower() or "detected unusual traffic" in res.text.lower():
+        return jsonify({
+            "time": time,
+            "escalacao": "A busca foi bloqueada pelo Google. Tente novamente em alguns minutos ou use outra fonte."
+        }), 503
+
     soup = BeautifulSoup(res.text, "html.parser")
     blocos = soup.find_all("div", class_="BNeawe")
 
@@ -27,5 +34,5 @@ def buscar_escalação():
     else:
         return jsonify({
             "time": time,
-            "escalacao": "Nenhum dado encontrado. O formato da fonte pode ter mudado."
+            "escalacao": "Nenhum dado encontrado. O formato da fonte pode ter mudado ou foi bloqueado."
         }), 404
