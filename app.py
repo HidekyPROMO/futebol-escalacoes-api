@@ -1,41 +1,80 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, Query
 import requests
-import os
+from fastapi.responses import JSONResponse
 
-app = Flask(__name__)
+app = FastAPI()
 
 API_KEY = "58ccb64123b8f5e6631108ac4a05815e"
 API_URL = "https://v3.football.api-sports.io"
 HEADERS = {"x-apisports-key": API_KEY}
 
-def fetch_from_api(path, params=None):
-    url = f"{API_URL}{path}"
-    response = requests.get(url, headers=HEADERS, params=params)
-    return response.json(), response.status_code
 
-@app.route("/<endpoint>", methods=['GET'])
-def generic_endpoint(endpoint):
-    params = request.args.to_dict()
-    data, status = fetch_from_api(f"/{endpoint}", params)
-    return jsonify(data), status
+def call_api(path: str, params: dict):
+    try:
+        res = requests.get(f"{API_URL}{path}", headers=HEADERS, params=params)
+        return JSONResponse(status_code=res.status_code, content=res.json())
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
-@app.route("/<section>/<endpoint>", methods=['GET'])
-def nested_endpoint(section, endpoint):
-    params = request.args.to_dict()
-    data, status = fetch_from_api(f"/{section}/{endpoint}", params)
-    return jsonify(data), status
 
-@app.route("/<section>/<sub>/<endpoint>", methods=['GET'])
-def deep_nested_endpoint(section, sub, endpoint):
-    params = request.args.to_dict()
-    data, status = fetch_from_api(f"/{section}/{sub}/{endpoint}", params)
-    return jsonify(data), status
+@app.get("/fixtures")
+def get_fixtures(team: int = Query(None), season: int = Query(None), league: int = Query(None)):
+    params = {}
+    if team: params["team"] = team
+    if season: params["season"] = season
+    if league: params["league"] = league
+    return call_api("/fixtures", params)
 
-if __name__ == '__main__':
-    app.run(debug=True)
-# Ensure the API key is set as an environment variable for security
-if not API_KEY:
-    raise ValueError("API_KEY is not set. Please set the API_KEY environment variable.")
-# Ensure the API URL is set as an environment variable for flexibility
-if not API_URL:
-    raise ValueError("API_URL is not set. Please set the API_URL environment variable.")
+
+@app.get("/teams")
+def get_teams(search: str = Query(...)):
+    return call_api("/teams", {"search": search})
+
+
+@app.get("/teams/statistics")
+def get_team_stats(team: int = Query(...), league: int = Query(...), season: int = Query(...)):
+    return call_api("/teams/statistics", {"team": team, "league": league, "season": season})
+
+
+@app.get("/players/topscorers")
+def get_top_scorers(league: int = Query(...), season: int = Query(...)):
+    return call_api("/players/topscorers", {"league": league, "season": season})
+
+
+# === Arquivos adicionais para deploy ===
+
+# requirements.txt
+# -----------------
+# fastapi
+# requests
+# uvicorn
+
+# vercel.json
+# -----------------
+# {
+#   "version": 2,
+#   "builds": [
+#     { "src": "api/index.py", "use": "@vercel/python" }
+#   ],
+#   "routes": [
+#     { "src": "/(.*)", "dest": "/api/index.py" }
+#   ]
+# }
+
+# README.md
+# -----------------
+# # Futebol API (Vercel + FastAPI)
+#
+# API leve, pronta para uso com GPT via Actions, integrada à API-Football.
+#
+# ## Rotas disponíveis:
+# - `/fixtures`
+# - `/teams?search=Palmeiras`
+# - `/teams/statistics?team=56&league=39&season=2023`
+# - `/players/topscorers?league=71&season=2024`
+#
+# ## Deploy (Passo a passo):
+# 1. Suba esse projeto para o GitHub
+# 2. Conecte-o ao Vercel (vercel.com)
+# 3. O deploy será automático
+# 4. Use a URL base no seu GPT personalizado
